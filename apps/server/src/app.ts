@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ProjectRepository } from "./database.js";
-import { priorities, projectSchema, statuses } from "./schema.js";
+import { priorities, projectSchema, statuses, subtaskSchema } from "./schema.js";
 
 export function createApp(repository = new ProjectRepository()) {
   const app = express();
@@ -50,6 +50,31 @@ export function createApp(repository = new ProjectRepository()) {
   app.delete("/api/projects/:id", (request, response) => {
     if (!repository.delete(parseId(request.params.id))) {
       return response.status(404).json({ error: "Project not found" });
+    }
+    response.status(204).send();
+  });
+
+  app.get("/api/projects/:id/subtasks", (request, response) => {
+    const projectId = parseId(request.params.id);
+    if (!repository.find(projectId)) return response.status(404).json({ error: "Project not found" });
+    response.json({ data: repository.listSubtasks(projectId) });
+  });
+
+  app.post("/api/projects/:id/subtasks", (request, response) => {
+    const projectId = parseId(request.params.id);
+    if (!repository.find(projectId)) return response.status(404).json({ error: "Project not found" });
+    response.status(201).json({ data: repository.createSubtask(projectId, subtaskSchema.parse(request.body)) });
+  });
+
+  app.put("/api/subtasks/:id", (request, response) => {
+    const subtask = repository.updateSubtask(parseId(request.params.id), subtaskSchema.parse(request.body));
+    if (!subtask) return response.status(404).json({ error: "Subtask not found" });
+    response.json({ data: subtask });
+  });
+
+  app.delete("/api/subtasks/:id", (request, response) => {
+    if (!repository.deleteSubtask(parseId(request.params.id))) {
+      return response.status(404).json({ error: "Subtask not found" });
     }
     response.status(204).send();
   });

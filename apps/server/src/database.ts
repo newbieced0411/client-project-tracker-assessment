@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import type { Project, ProjectInput } from "./schema.js";
+import type { Project, ProjectInput, Subtask, SubtaskInput } from "./schema.js";
 
 const seedProjects: ProjectInput[] = [
   {
@@ -71,6 +71,16 @@ export class ProjectRepository {
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CHECK (due_date >= start_date)
       );
+      CREATE TABLE IF NOT EXISTS subtasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        completed INTEGER NOT NULL DEFAULT 0 CHECK (completed IN (0, 1)),
+        due_date TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_subtasks_project_id ON subtasks(project_id);
     `);
 
     const row = this.db.prepare("SELECT COUNT(*) AS count FROM projects").get() as { count: number };
@@ -95,19 +105,31 @@ export class ProjectRepository {
     }
 
     const sortColumns: Record<string, string> = {
-      newest: "created_at DESC",
-      dueSoon: "due_date ASC",
-      dueLatest: "due_date DESC",
-      name: "project_name COLLATE NOCASE ASC",
-      priority: "CASE priority WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END ASC",
+      newest: "projects.created_at DESC",
+      dueSoon: "projects.due_date ASC",
+      dueLatest: "projects.due_date DESC",
+      name: "projects.project_name COLLATE NOCASE ASC",
+      priority: "CASE projects.priority WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END ASC",
     };
     const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
     const order = sortColumns[filters.sort ?? "newest"] ?? sortColumns.newest;
-    return this.db.prepare(`SELECT * FROM projects ${where} ORDER BY ${order}`).all(params).map(mapProject);
+    return this.db.prepare(`
+      SELECT projects.*,
+        COUNT(subtasks.id) AS subtask_count,
+        COALESCE(SUM(CASE WHEN subtasks.completed = 1 THEN 1 ELSE 0 END), 0) AS completed_subtask_count
+      FROM projects LEFT JOIN subtasks ON subtasks.project_id = projects.id
+      ${where} GROUP BY projects.id ORDER BY ${order}
+    `).all(params).map(mapProject);
   }
 
   find(id: number) {
-    const row = this.db.prepare("SELECT * FROM projects WHERE id = ?").get(id);
+    const row = this.db.prepare(`
+      SELECT projects.*,
+        COUNT(subtasks.id) AS subtask_count,
+        COALESCE(SUM(CASE WHEN subtasks.completed = 1 THEN 1 ELSE 0 END), 0) AS completed_subtask_count
+      FROM projects LEFT JOIN subtasks ON subtasks.project_id = projects.id
+      WHERE projects.id = ? GROUP BY projects.id
+    `).get(id);
     return row ? mapProject(row) : undefined;
   }
 
@@ -133,6 +155,36 @@ export class ProjectRepository {
     return this.db.prepare("DELETE FROM projects WHERE id = ?").run(id).changes > 0;
   }
 
+  listSubtasks(projectId: number) {
+    return this.db.prepare("SELECT * FROM subtasks WHERE project_id = ? ORDER BY completed ASC, due_date IS NULL, due_date ASC, created_at ASC")
+      .all(projectId).map(mapSubtask);
+  }
+
+  createSubtask(projectId: number, subtask: SubtaskInput) {
+    const result = this.db.prepare(`
+      INSERT INTO subtasks (project_id, title, completed, due_date)
+      VALUES (:projectId, :title, :completed, :dueDate)
+    `).run({ ...subtask, projectId, completed: subtask.completed ? 1 : 0 });
+    return this.findSubtask(Number(result.lastInsertRowid))!;
+  }
+
+  findSubtask(id: number) {
+    const row = this.db.prepare("SELECT * FROM subtasks WHERE id = ?").get(id);
+    return row ? mapSubtask(row) : undefined;
+  }
+
+  updateSubtask(id: number, subtask: SubtaskInput) {
+    const result = this.db.prepare(`
+      UPDATE subtasks SET title = :title, completed = :completed,
+        due_date = :dueDate, updated_at = CURRENT_TIMESTAMP WHERE id = :id
+    `).run({ ...subtask, id, completed: subtask.completed ? 1 : 0 });
+    return result.changes ? this.findSubtask(id) : undefined;
+  }
+
+  deleteSubtask(id: number) {
+    return this.db.prepare("DELETE FROM subtasks WHERE id = ?").run(id).changes > 0;
+  }
+
   close() {
     this.db.close();
   }
@@ -149,6 +201,21 @@ function mapProject(row: unknown): Project {
     priority: value.priority as Project["priority"],
     startDate: String(value.start_date),
     dueDate: String(value.due_date),
+    createdAt: String(value.created_at),
+    updatedAt: String(value.updated_at),
+    subtaskCount: Number(value.subtask_count ?? 0),
+    completedSubtaskCount: Number(value.completed_subtask_count ?? 0),
+  };
+}
+
+function mapSubtask(row: unknown): Subtask {
+  const value = row as Record<string, unknown>;
+  return {
+    id: Number(value.id),
+    projectId: Number(value.project_id),
+    title: String(value.title),
+    completed: Boolean(value.completed),
+    dueDate: value.due_date ? String(value.due_date) : null,
     createdAt: String(value.created_at),
     updatedAt: String(value.updated_at),
   };

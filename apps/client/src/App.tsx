@@ -6,9 +6,12 @@ import {
   Check,
   ChevronDown,
   CircleAlert,
+  Circle,
+  CheckCircle2,
   Clock3,
   LayoutGrid,
   ListFilter,
+  ListChecks,
   LoaderCircle,
   Pencil,
   Plus,
@@ -17,7 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { api } from "./api";
-import { priorities, statuses, type Project, type ProjectInput, type Status } from "./types";
+import { priorities, statuses, type Project, type ProjectInput, type Status, type Subtask, type SubtaskInput } from "./types";
 
 const emptyProject: ProjectInput = {
   clientName: "",
@@ -39,6 +42,7 @@ export function App() {
   const [sort, setSort] = useState("newest");
   const [editing, setEditing] = useState<Project | null | "new">(null);
   const [deleting, setDeleting] = useState<Project | null>(null);
+  const [tasksFor, setTasksFor] = useState<Project | null>(null);
   const [toast, setToast] = useState("");
 
   const loadProjects = useCallback(async () => {
@@ -161,7 +165,7 @@ export function App() {
           ) : (
             <div className="project-grid">
               {projects.map((project, index) => (
-                <ProjectCard key={project.id} project={project} index={index} onEdit={() => setEditing(project)} onDelete={() => setDeleting(project)} />
+                <ProjectCard key={project.id} project={project} index={index} onEdit={() => setEditing(project)} onDelete={() => setDeleting(project)} onTasks={() => setTasksFor(project)} />
               ))}
             </div>
           )}
@@ -175,6 +179,15 @@ export function App() {
           project={editing === "new" ? undefined : editing}
           onClose={() => setEditing(null)}
           onSaved={async (message) => { setEditing(null); setToast(message); await loadProjects(); }}
+        />
+      )}
+
+      {tasksFor && (
+        <SubtaskDialog
+          project={tasksFor}
+          onClose={() => setTasksFor(null)}
+          onChanged={loadProjects}
+          onToast={setToast}
         />
       )}
 
@@ -215,8 +228,9 @@ function Select({ value, onChange, label, options, display = {} }: { value: stri
   );
 }
 
-function ProjectCard({ project, index, onEdit, onDelete }: { project: Project; index: number; onEdit: () => void; onDelete: () => void }) {
+function ProjectCard({ project, index, onEdit, onDelete, onTasks }: { project: Project; index: number; onEdit: () => void; onDelete: () => void; onTasks: () => void }) {
   const overdue = project.status !== "Completed" && new Date(`${project.dueDate}T23:59:59`) < new Date();
+  const progress = project.subtaskCount ? Math.round((project.completedSubtaskCount / project.subtaskCount) * 100) : 0;
   return (
     <article className="project-card" style={{ animationDelay: `${index * 45}ms` }}>
       <div className="card-accent" data-priority={project.priority} />
@@ -239,7 +253,108 @@ function ProjectCard({ project, index, onEdit, onDelete }: { project: Project; i
           <button className="delete-action" onClick={onDelete} aria-label={`Delete ${project.projectName}`}><Trash2 size={16} /></button>
         </div>
       </div>
+      <button className="subtask-summary" onClick={onTasks}>
+        <span><ListChecks size={15} />{project.subtaskCount ? `${project.completedSubtaskCount} of ${project.subtaskCount} subtasks` : "Add subtasks"}</span>
+        <span className="progress-track" aria-label={`${progress}% of subtasks complete`}><i style={{ width: `${progress}%` }} /></span>
+      </button>
     </article>
+  );
+}
+
+function SubtaskDialog({ project, onClose, onChanged, onToast }: { project: Project; onClose: () => void; onChanged: () => Promise<void>; onToast: (message: string) => void }) {
+  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
+  const [title, setTitle] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDueDate, setEditDueDate] = useState("");
+  const [loadingTasks, setLoadingTasks] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setLoadingTasks(true);
+    try { setSubtasks(await api.listSubtasks(project.id)); }
+    catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Could not load subtasks."); }
+    finally { setLoadingTasks(false); }
+  }, [project.id]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function refresh(message?: string) {
+    await Promise.all([load(), onChanged()]);
+    if (message) onToast(message);
+  }
+
+  async function addSubtask(event: React.FormEvent) {
+    event.preventDefault();
+    if (!title.trim()) return;
+    setSaving(true); setError("");
+    try {
+      await api.createSubtask(project.id, { title, completed: false, dueDate: dueDate || null });
+      setTitle(""); setDueDate("");
+      await refresh("Subtask added");
+    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Could not add subtask."); }
+    finally { setSaving(false); }
+  }
+
+  async function updateSubtask(subtask: Subtask, changes: Partial<SubtaskInput>, message?: string) {
+    setError("");
+    try {
+      await api.updateSubtask(subtask.id, { title: subtask.title, completed: subtask.completed, dueDate: subtask.dueDate, ...changes });
+      setEditingId(null);
+      await refresh(message);
+    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Could not update subtask."); }
+  }
+
+  async function removeSubtask(id: number) {
+    setError("");
+    try { await api.deleteSubtask(id); await refresh("Subtask deleted"); }
+    catch (requestError) { setError(requestError instanceof Error ? requestError.message : "Could not delete subtask."); }
+  }
+
+  const complete = subtasks.filter((subtask) => subtask.completed).length;
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="project-dialog subtask-dialog" role="dialog" aria-modal="true" aria-labelledby="subtask-title">
+        <div className="dialog-header">
+          <div><p className="section-label">PROJECT SUBTASKS</p><h2 id="subtask-title">{project.projectName}</h2><p className="dialog-subtitle">{complete} of {subtasks.length} complete</p></div>
+          <button className="close-button" onClick={onClose} aria-label="Close"><X /></button>
+        </div>
+
+        <form className="subtask-create" onSubmit={addSubtask}>
+          <label><span className="sr-only">Subtask title</span><input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Add the next step…" maxLength={200} required /></label>
+          <label><span className="sr-only">Subtask due date</span><input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></label>
+          <button className="primary-button" disabled={saving || !title.trim()}><Plus size={17} /> Add</button>
+        </form>
+
+        {error && <div className="form-error"><CircleAlert size={17} />{error}</div>}
+        {loadingTasks ? <div className="task-state"><LoaderCircle className="spin" /></div> : subtasks.length === 0 ? (
+          <div className="task-empty"><ListChecks /><h3>Break the work into steps.</h3><p>Add the first subtask above to start tracking progress.</p></div>
+        ) : (
+          <div className="subtask-list">
+            {subtasks.map((subtask) => editingId === subtask.id ? (
+              <form className="subtask-row editing" key={subtask.id} onSubmit={(event) => { event.preventDefault(); void updateSubtask(subtask, { title: editTitle, dueDate: editDueDate || null }, "Subtask updated"); }}>
+                <input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} required autoFocus />
+                <input type="date" value={editDueDate} onChange={(event) => setEditDueDate(event.target.value)} />
+                <button className="task-icon save" aria-label="Save subtask"><Check size={16} /></button>
+                <button type="button" className="task-icon" onClick={() => setEditingId(null)} aria-label="Cancel editing"><X size={16} /></button>
+              </form>
+            ) : (
+              <div className={subtask.completed ? "subtask-row is-complete" : "subtask-row"} key={subtask.id}>
+                <button className="task-check" onClick={() => void updateSubtask(subtask, { completed: !subtask.completed }, subtask.completed ? "Subtask reopened" : "Subtask completed")} aria-label={subtask.completed ? "Mark incomplete" : "Mark complete"}>
+                  {subtask.completed ? <CheckCircle2 /> : <Circle />}
+                </button>
+                <div className="task-copy"><strong>{subtask.title}</strong>{subtask.dueDate && <span>Due {formatDate(subtask.dueDate)}</span>}</div>
+                <button className="task-icon" onClick={() => { setEditingId(subtask.id); setEditTitle(subtask.title); setEditDueDate(subtask.dueDate ?? ""); }} aria-label={`Edit ${subtask.title}`}><Pencil size={15} /></button>
+                <button className="task-icon delete-action" onClick={() => void removeSubtask(subtask.id)} aria-label={`Delete ${subtask.title}`}><Trash2 size={15} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
   );
 }
 

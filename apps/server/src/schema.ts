@@ -28,4 +28,24 @@ export interface Project extends ProjectInput {
   id: number;
   createdAt: string;
   updatedAt: string;
+  subtaskCount: number;
+  completedSubtaskCount: number;
+}
+
+export const subtaskSchema = z.object({
+  title: z.string().trim().min(1, "Subtask title is required").max(200),
+  completed: z.boolean().default(false),
+  dueDate: z.union([dateField, z.literal(""), z.null()]).optional().transform((value) => value || null),
+});
+
+export type SubtaskInput = z.infer<typeof subtaskSchema>;
+
+export interface Subtask {
+  id: number;
+  projectId: number;
+  title: string;
+  completed: boolean;
+  dueDate: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

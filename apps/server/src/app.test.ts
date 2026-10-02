@@ -55,4 +55,29 @@ describe("projects API", () => {
     expect(response.body.error).toBe("Validation failed");
     expect(response.body.details.length).toBeGreaterThanOrEqual(2);
   });
+
+  it("manages project subtasks and reports progress", async () => {
+    const created = await request(app).post("/api/projects/1/subtasks").send({
+      title: "Review responsive layouts",
+      completed: false,
+      dueDate: "2026-07-01",
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.data.projectId).toBe(1);
+
+    const subtaskId = created.body.data.id;
+    const updated = await request(app).put(`/api/subtasks/${subtaskId}`).send({
+      title: "Review responsive layouts",
+      completed: true,
+      dueDate: "2026-07-01",
+    });
+    expect(updated.body.data.completed).toBe(true);
+
+    const project = await request(app).get("/api/projects/1");
+    expect(project.body.data.subtaskCount).toBe(1);
+    expect(project.body.data.completedSubtaskCount).toBe(1);
+
+    expect((await request(app).delete(`/api/subtasks/${subtaskId}`)).status).toBe(204);
+    expect((await request(app).get("/api/projects/1/subtasks")).body.data).toHaveLength(0);
+  });
 });

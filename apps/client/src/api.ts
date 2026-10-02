@@ -1,4 +1,4 @@
-import type { Project, ProjectInput } from "./types";
+import type { Project, ProjectInput, Subtask, SubtaskInput } from "./types";
 
 type Filters = { search: string; status: string; priority: string; sort: string };
 
@@ -30,5 +30,17 @@ export const api = {
   },
   delete(id: number) {
     return request<void>(`/api/projects/${id}`, { method: "DELETE" });
+  },
+  listSubtasks(projectId: number) {
+    return request<Subtask[]>(`/api/projects/${projectId}/subtasks`);
+  },
+  createSubtask(projectId: number, subtask: SubtaskInput) {
+    return request<Subtask>(`/api/projects/${projectId}/subtasks`, { method: "POST", body: JSON.stringify(subtask) });
+  },
+  updateSubtask(id: number, subtask: SubtaskInput) {
+    return request<Subtask>(`/api/subtasks/${id}`, { method: "PUT", body: JSON.stringify(subtask) });
+  },
+  deleteSubtask(id: number) {
+    return request<void>(`/api/subtasks/${id}`, { method: "DELETE" });
   },
 };

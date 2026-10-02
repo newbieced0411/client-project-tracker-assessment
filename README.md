@@ -2,7 +2,19 @@
 
 A focused full-stack project tracker for digital agencies. Folio gives project managers a fast, clear way to create, update, find, filter, sort, and remove client engagements.
 
-This submission implements the complete CRUD brief plus the optional search, status filtering, priority filtering, sorting, automated tests, and Docker setup.
+This submission implements the complete CRUD brief plus project subtasks, search, status filtering, priority filtering, sorting, automated tests, and Docker setup.
+
+## Features Implemented
+
+- Create, view, edit, and delete client projects
+- Required-field, enum, and cross-field date validation with meaningful API errors
+- Search across projects, clients, and descriptions
+- Filter by status and priority; sort by date, name, and priority
+- Create, edit, complete, reopen, and delete subtasks within each project
+- Live project-level subtask progress (`completed / total`)
+- Responsive, keyboard-friendly interface with loading, empty, error, and confirmation states
+- Persistent SQLite storage with cascading project/subtask deletion
+- REST integration tests and a production Docker build
 
 ## Stack
 
@@ -13,7 +25,7 @@ This submission implements the complete CRUD brief plus the optional search, sta
 
 The app uses a small monorepo. `apps/client` owns the browser experience; `apps/server` owns validation, persistence, and the REST API. The repository layer keeps SQLite details separate from HTTP concerns, and a shared schema at the API boundary provides consistent, meaningful errors.
 
-## Run locally
+## Setup Instructions
 
 Prerequisites: Node.js 24+ and pnpm 10+.
 
@@ -41,7 +53,7 @@ pnpm test
 pnpm build
 ```
 
-The integration suite covers listing/filtering, the full create-read-update-delete lifecycle, not-found responses, and field-level validation failures.
+The integration suite covers listing/filtering, project and subtask CRUD, progress totals, not-found responses, and field-level validation failures.
 
 ## Docker
 
@@ -60,9 +72,22 @@ The complete application will be available at `http://localhost:3001`. The compo
 | `POST` | `/api/projects` | Create a project |
 | `PUT` | `/api/projects/:id` | Replace a project |
 | `DELETE` | `/api/projects/:id` | Delete a project |
+| `GET` | `/api/projects/:id/subtasks` | List a project's subtasks |
+| `POST` | `/api/projects/:id/subtasks` | Create a subtask |
+| `PUT` | `/api/subtasks/:id` | Edit or complete a subtask |
+| `DELETE` | `/api/subtasks/:id` | Delete a subtask |
 | `GET` | `/api/health` | Health check |
 
-Every write validates required names, allowed status and priority values, ISO date shape, and that the due date is not earlier than the start date. Invalid input returns HTTP `422` with field-level details. Missing resources return HTTP `404`.
+Every write validates required names, allowed status and priority values, ISO date shape, and that the project due date is not earlier than its start date. Invalid input returns HTTP `422` with field-level details. Missing resources return HTTP `404`.
+
+## Assumptions Made
+
+- A project belongs to one agency workspace; authentication and multi-tenancy are outside the assessment scope.
+- Project status and priority use only the values defined in `REQUIREMENTS.md`.
+- Dates are stored as ISO calendar dates (`YYYY-MM-DD`) without a time zone because the brief asks for dates, not appointments.
+- Subtasks are an optional enhancement owned by exactly one project. Deleting a project deletes its subtasks through a database foreign key.
+- Subtask due dates are optional and independent of the project's date range so teams can capture follow-up work without losing it.
+- The supplied sample data is used as first-run seed data; subsequent changes persist locally in SQLite.
 
 ## Technical reflection
 

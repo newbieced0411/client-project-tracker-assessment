@@ -17,4 +17,19 @@ export interface Project extends ProjectInput {
   id: number;
   createdAt: string;
   updatedAt: string;
+  subtaskCount: number;
+  completedSubtaskCount: number;
+}
+
+export interface SubtaskInput {
+  title: string;
+  completed: boolean;
+  dueDate: string | null;
+}
+
+export interface Subtask extends SubtaskInput {
+  id: number;
+  projectId: number;
+  createdAt: string;
+  updatedAt: string;
 }
