@@ -1,0 +1,10 @@
+services:
+  api:
+    build: .
+    ports:
+      - "3001:3001"
+    volumes:
+      - project-data:/app/data
+
+volumes:
+  project-data:

@@ -1,0 +1,12 @@
+{
+  "name": "client-project-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "scripts": {
+    "dev": "pnpm --parallel --filter ./apps/* dev",
+    "build": "pnpm --filter server build && pnpm --filter client build",
+    "test": "pnpm --filter server test",
+    "start": "pnpm --filter server start"
+  }
+}
