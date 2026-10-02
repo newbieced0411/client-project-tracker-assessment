@@ -1,8 +1,8 @@
 node_modules/
 .pnpm-store/
 dist/
-data/*.db
-data/*.db-*
+**/data/*.db
+**/data/*.db-*
 .env
 .DS_Store
 coverage/

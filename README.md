@@ -17,6 +17,14 @@ The app uses a small monorepo. `apps/client` owns the browser experience; `apps/
 
 Prerequisites: Node.js 24+ and pnpm 10+.
 
+### Windows quick start
+
+Double-click `start-dev.cmd`, wait until both services report that they are ready, then open [http://localhost:5173](http://localhost:5173). Keep the command window open while using the application.
+
+Do not open `apps/client/index.html` directly. It is source code for Vite and will not work from a `file://` URL because the frontend needs compilation and the backend API must be running.
+
+### Command line
+
 ```bash
 pnpm install
 pnpm dev
