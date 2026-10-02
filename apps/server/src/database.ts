@@ -3,8 +3,9 @@ import { mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { Project, ProjectInput, Subtask, SubtaskInput } from "./schema.js";
 
-const seedProjects: ProjectInput[] = [
+const seedProjects: Array<ProjectInput & { id: number }> = [
   {
+    id: 1,
     clientName: "Acme Corporation",
     projectName: "Corporate Website Redesign",
     description: "Redesign and modernize the company's corporate website.",
@@ -14,6 +15,7 @@ const seedProjects: ProjectInput[] = [
     dueDate: "2026-07-15",
   },
   {
+    id: 2,
     clientName: "GreenLeaf Cafe",
     projectName: "Online Ordering System",
     description: "Develop an online ordering platform for customers.",
@@ -23,22 +25,64 @@ const seedProjects: ProjectInput[] = [
     dueDate: "2026-08-01",
   },
   {
-    clientName: "Northstar Studio",
-    projectName: "Brand Identity Refresh",
-    description: "Refresh the visual identity and prepare a reusable brand toolkit.",
+    id: 3,
+    clientName: "Bright Realty",
+    projectName: "Property Listing Portal",
+    description: "Build a portal for managing property listings.",
     status: "On Hold",
-    priority: "Low",
-    startDate: "2026-05-12",
+    priority: "Medium",
+    startDate: "2026-05-15",
     dueDate: "2026-07-30",
   },
   {
-    clientName: "Solace Health",
-    projectName: "Patient Portal MVP",
-    description: "Deliver an accessible portal for appointment and profile management.",
-    status: "Completed",
+    id: 4,
+    clientName: "Nova Fitness",
+    projectName: "Mobile App MVP",
+    description: "Develop the first version of the fitness tracking app.",
+    status: "In Progress",
     priority: "High",
-    startDate: "2026-03-03",
-    dueDate: "2026-05-28",
+    startDate: "2026-06-05",
+    dueDate: "2026-08-20",
+  },
+  {
+    id: 5, clientName: "Blue Ocean Travel", projectName: "Booking Platform Enhancement",
+    description: "Improve search and booking functionalities.", status: "Completed", priority: "Medium",
+    startDate: "2026-04-01", dueDate: "2026-05-30",
+  },
+  {
+    id: 6, clientName: "TechVision Solutions", projectName: "CRM Dashboard",
+    description: "Develop an internal CRM dashboard.", status: "Planning", priority: "High",
+    startDate: "2026-06-15", dueDate: "2026-08-15",
+  },
+  {
+    id: 7, clientName: "Urban Living", projectName: "Property Management System",
+    description: "Create a platform for managing rental properties.", status: "In Progress", priority: "Medium",
+    startDate: "2026-05-20", dueDate: "2026-08-10",
+  },
+  {
+    id: 8, clientName: "Elite Events", projectName: "Event Registration Portal",
+    description: "Develop a registration and ticketing portal.", status: "Planning", priority: "Low",
+    startDate: "2026-06-20", dueDate: "2026-09-01",
+  },
+  {
+    id: 9, clientName: "HealthFirst Clinic", projectName: "Patient Appointment System",
+    description: "Build an appointment scheduling application.", status: "Completed", priority: "High",
+    startDate: "2026-03-01", dueDate: "2026-05-01",
+  },
+  {
+    id: 10, clientName: "MarketPro", projectName: "Marketing Campaign Dashboard",
+    description: "Track and manage digital marketing campaigns.", status: "In Progress", priority: "Medium",
+    startDate: "2026-06-01", dueDate: "2026-07-31",
+  },
+  {
+    id: 11, clientName: "Sunrise Education", projectName: "Learning Management Portal",
+    description: "Develop a portal for students and instructors.", status: "Planning", priority: "High",
+    startDate: "2026-07-01", dueDate: "2026-09-30",
+  },
+  {
+    id: 12, clientName: "FreshFarm", projectName: "Inventory Management System",
+    description: "Track inventory across multiple locations.", status: "On Hold", priority: "Low",
+    startDate: "2026-05-01", dueDate: "2026-08-01",
   },
 ];
 
@@ -83,8 +127,34 @@ export class ProjectRepository {
       CREATE INDEX IF NOT EXISTS idx_subtasks_project_id ON subtasks(project_id);
     `);
 
-    const row = this.db.prepare("SELECT COUNT(*) AS count FROM projects").get() as { count: number };
-    if (row.count === 0) seedProjects.forEach((project) => this.create(project));
+    this.seedAssessmentProjects();
+  }
+
+  private seedAssessmentProjects() {
+    const insert = this.db.prepare(`
+      INSERT INTO projects (id, client_name, project_name, description, status, priority, start_date, due_date)
+      VALUES (:id, :clientName, :projectName, :description, :status, :priority, :startDate, :dueDate)
+    `);
+    const replaceLegacy = this.db.prepare(`
+      UPDATE projects SET client_name = :clientName, project_name = :projectName,
+        description = :description, status = :status, priority = :priority,
+        start_date = :startDate, due_date = :dueDate, updated_at = CURRENT_TIMESTAMP
+      WHERE id = :id
+    `);
+    const legacyClients: Record<number, string> = { 3: "Northstar Studio", 4: "Solace Health" };
+
+    this.db.exec("BEGIN");
+    try {
+      for (const project of seedProjects) {
+        const existing = this.db.prepare("SELECT client_name FROM projects WHERE id = ?").get(project.id) as { client_name: string } | undefined;
+        if (!existing) insert.run(project);
+        else if (legacyClients[project.id] === existing.client_name) replaceLegacy.run(project);
+      }
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
+      throw error;
+    }
   }
 
   list(filters: { search?: string; status?: string; priority?: string; sort?: string }) {

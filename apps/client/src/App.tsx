@@ -140,8 +140,8 @@ export function App() {
               <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search projects or clients…" />
               {search && <button onClick={() => setSearch("")} aria-label="Clear search"><X size={15} /></button>}
             </label>
-            <Select value={status} onChange={setStatus} label="All statuses" options={statuses} />
-            <Select value={priority} onChange={setPriority} label="All priorities" options={priorities} />
+            <Select value={status} onChange={setStatus} label="All statuses" options={statuses} includeEmpty />
+            <Select value={priority} onChange={setPriority} label="All priorities" options={priorities} includeEmpty />
             <Select
               value={sort}
               onChange={setSort}
@@ -215,12 +215,12 @@ function Stat({ icon, value, label }: { icon: React.ReactNode; value: number; la
   return <div className="stat"><span className="stat-icon">{icon}</span><strong>{value.toString().padStart(2, "0")}</strong><span>{label}</span></div>;
 }
 
-function Select({ value, onChange, label, options, display = {} }: { value: string; onChange: (value: string) => void; label: string; options: readonly string[]; display?: Record<string, string> }) {
+function Select({ value, onChange, label, options, display = {}, includeEmpty = false }: { value: string; onChange: (value: string) => void; label: string; options: readonly string[]; display?: Record<string, string>; includeEmpty?: boolean }) {
   return (
     <label className="select-field">
       <span className="sr-only">{label}</span>
       <select value={value} onChange={(event) => onChange(event.target.value)}>
-        {!value && <option value="">{label}</option>}
+        {includeEmpty && <option value="">{label}</option>}
         {options.map((option) => <option key={option} value={option}>{display[option] ?? option}</option>)}
       </select>
       <ChevronDown size={15} />

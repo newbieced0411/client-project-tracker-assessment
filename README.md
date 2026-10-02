@@ -87,7 +87,7 @@ Every write validates required names, allowed status and priority values, ISO da
 - Dates are stored as ISO calendar dates (`YYYY-MM-DD`) without a time zone because the brief asks for dates, not appointments.
 - Subtasks are an optional enhancement owned by exactly one project. Deleting a project deletes its subtasks through a database foreign key.
 - Subtask due dates are optional and independent of the project's date range so teams can capture follow-up work without losing it.
-- The supplied sample data is used as first-run seed data; subsequent changes persist locally in SQLite.
+- All 12 records from the supplied `test_data.json` are seeded by stable IDs. Existing user-created projects and subtasks are preserved, and subsequent changes persist locally in SQLite.
 
 ## Technical reflection
 

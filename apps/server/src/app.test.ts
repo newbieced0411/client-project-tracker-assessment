@@ -14,6 +14,9 @@ describe("projects API", () => {
   afterEach(() => repository.close());
 
   it("lists seeded projects and filters them", async () => {
+    const allProjects = await request(app).get("/api/projects");
+    expect(allProjects.body.data).toHaveLength(12);
+
     const response = await request(app).get("/api/projects?status=Planning&search=GreenLeaf");
     expect(response.status).toBe(200);
     expect(response.body.data).toHaveLength(1);
